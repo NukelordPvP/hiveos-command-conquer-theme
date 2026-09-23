@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS - Command & Conquer Red Alert 3 UI
 // @namespace    [https://github.com/NukelordPvP/hiveos-command-conquer-theme](https://github.com/NukelordPvP/hiveos-command-conquer-theme)
-// @version      3.2.0
+// @version      3.2.1
 // @description  Converts the HiveOS web interface into a Command & Conquer / Red Alert 3 command center with RA3 music and background.
 // @author       Zack
 // @match        [https://the.hiveos.farm/](https://the.hiveos.farm/)*
@@ -13,7 +13,6 @@
 (function () {
     'use strict';
 
-    ```
     /*
      * ============================================================
      * COMMAND & CONQUER / RED ALERT 3 ASSETS
@@ -1788,6 +1787,5 @@
     } else {
         start();
     }
-    ```
 
 })();
