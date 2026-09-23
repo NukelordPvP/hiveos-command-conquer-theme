@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS - Command & Conquer Red Alert 3 UI
 // @namespace    https://github.com/NukelordPvP/hiveos-command-conquer-theme
-// @version      3.0.0
+// @version      3.1.0
 // @description  Converts the HiveOS web interface into a Command & Conquer / Red Alert 3 command center with RA3 music and background.
 // @author       Zack
 // @match        https://the.hiveos.farm/*
@@ -12,6 +12,7 @@
 
 (function () {
     'use strict';
+
 
     /*
      * ============================================================
@@ -124,10 +125,17 @@
      */
 
     let cncAudio = null;
-
     let cncTrackIndex = 0;
-
     let cncAudioStarted = false;
+
+
+    /*
+     * ============================================================
+     * BACKGROUND CLEANUP STATE
+     * ============================================================
+     */
+
+    let backgroundCleanupScheduled = false;
 
 
     /*
@@ -137,6 +145,7 @@
      */
 
     function cncAssetURL(base, filename) {
+
         return base + '/' +
         filename
         .split('/')
@@ -163,7 +172,7 @@
 
         --hos-color-red-005: #160000 !important;
         --hos-color-red-015: ${C.redDeep} !important;
-        --hos-color-red-030: rgba(255,59,48,.30) !important;
+        --hos-color-red-030: rgba(255, 59, 48, .30) !important;
         --hos-color-red-037: ${C.redDark} !important;
         --hos-color-red-060: ${C.red} !important;
         --hos-color-red-065: ${C.redBright} !important;
@@ -232,21 +241,267 @@
 
     function createCNCBackground() {
 
-        if (document.getElementById('cnc-background'))
+        let bg =
+        document.getElementById('cnc-background');
+
+        if (!bg) {
+
+            bg =
+            document.createElement('div');
+
+            bg.id =
+            'cnc-background';
+
+        /*
+         * Insert before the HiveOS React application.
+         */
+        if (document.body) {
+
+            document.body.insertBefore(
+                bg,
+                document.body.firstChild
+            );
+
+        } else {
+
             return;
+        }
+        }
 
-        const bg = document.createElement('div');
 
-        bg.id = 'cnc-background';
+        /*
+         * Re-apply the background directly to the element.
+         *
+         * This protects it against HiveOS/React replacing
+         * styles or rebuilding the application.
+         */
 
-        document.body.insertBefore(
-            bg,
-            document.body.firstChild
+        bg.style.setProperty(
+            'position',
+            'fixed',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'inset',
+            '0',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'width',
+            '100vw',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'height',
+            '100vh',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'background-image',
+            `
+            linear-gradient(
+                rgba(0, 0, 0, .48),
+                            rgba(0, 0, 0, .72)
+            ),
+            url("${CNC_BACKGROUND}")
+            `,
+            'important'
+        );
+
+        bg.style.setProperty(
+            'background-size',
+            'cover',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'background-position',
+            'center center',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'background-repeat',
+            'no-repeat',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'background-color',
+            C.black,
+            'important'
+        );
+
+        bg.style.setProperty(
+            'z-index',
+            '0',
+            'important'
+        );
+
+        bg.style.setProperty(
+            'pointer-events',
+            'none',
+            'important'
         );
     }
 
 
+    /*
+     * ============================================================
+     * REMOVE HIVEOS BACKGROUND
+     * ============================================================
+     *
+     * HiveOS can place its background image on a large React
+     * container rather than on <body>.
+     *
+     * We remove background images from large page-level elements
+     * while deliberately leaving small UI images alone.
+     *
+     * This prevents us from destroying icons, sprites, buttons,
+     * status graphics, etc.
+     * ============================================================
+     */
+
+    function removeHiveOSBackgrounds() {
+
+        if (!document.body)
+            return;
+
+
+        const protectedIds =
+        new Set([
+            'cnc-background',
+            'cnc-command-header',
+            'cnc-sidebar',
+            'cnc-corners'
+        ]);
+
+
+        const elements =
+        document.querySelectorAll('*');
+
+
+        elements.forEach(el => {
+
+            /*
+             * Never modify our own theme elements.
+             */
+
+            if (
+                protectedIds.has(el.id) ||
+                el.closest('#cnc-background') ||
+                el.closest('#cnc-command-header') ||
+                el.closest('#cnc-sidebar') ||
+                el.closest('#cnc-corners')
+            ) {
+                return;
+            }
+
+
+            const style =
+            window.getComputedStyle(el);
+
+
+            const backgroundImage =
+            style.backgroundImage;
+
+
+            if (
+                !backgroundImage ||
+                backgroundImage === 'none'
+            ) {
+                return;
+            }
+
+
+            const rect =
+            el.getBoundingClientRect();
+
+
+            /*
+             * Identify large page-level elements.
+             *
+             * We intentionally don't remove background images from
+             * small elements because HiveOS may use them for icons
+             * and UI sprites.
+             */
+
+            const isLarge =
+            rect.width >= 500 ||
+            rect.height >= 400 ||
+            (
+                rect.width >=
+                window.innerWidth * 0.50 &&
+                rect.height >=
+                window.innerHeight * 0.25
+            );
+
+
+            if (!isLarge)
+                return;
+
+
+            /*
+             * Only remove the image.
+             *
+             * Do not force the entire element transparent here.
+             * HiveOS may use its background-color for legitimate
+             * panels.
+             */
+
+            el.style.setProperty(
+                'background-image',
+                'none',
+                'important'
+            );
+        });
+    }
+
+
+    /*
+     * Schedule background cleanup once per event loop.
+     *
+     * React can generate many mutations during navigation.
+     * This prevents us from scanning the entire DOM dozens of
+     * times in rapid succession.
+     */
+
+    function scheduleBackgroundCleanup() {
+
+        if (backgroundCleanupScheduled)
+            return;
+
+        backgroundCleanupScheduled =
+        true;
+
+
+        requestAnimationFrame(() => {
+
+            backgroundCleanupScheduled =
+            false;
+
+            createCNCBackground();
+
+            removeHiveOSBackgrounds();
+        });
+    }
+
+
+    /*
+     * ============================================================
+     * BACKGROUND CSS
+     * ============================================================
+     */
+
     GM_addStyle(`
+    /*
+     * RA3 background layer.
+     */
+
     #cnc-background {
     position: fixed !important;
 
@@ -257,8 +512,8 @@
 
     background-image:
     linear-gradient(
-        rgba(0,0,0,.48),
-                    rgba(0,0,0,.72)
+        rgba(0, 0, 0, .48),
+                    rgba(0, 0, 0, .72)
     ),
     url("${CNC_BACKGROUND}") !important;
 
@@ -268,9 +523,80 @@
 
     background-repeat: no-repeat !important;
 
+    background-color: #050607 !important;
+
     z-index: 0 !important;
 
     pointer-events: none !important;
+    }
+
+
+    /*
+     * Remove the original HiveOS page background.
+     */
+
+    html,
+    body {
+        background-color: transparent !important;
+
+        background-image: none !important;
+
+        background-repeat: no-repeat !important;
+    }
+
+
+    /*
+     * Main HiveOS application layers.
+     */
+
+    #root,
+    #app,
+    main,
+    [role="main"] {
+        background-color: transparent !important;
+
+        background-image: none !important;
+
+        background-repeat: no-repeat !important;
+    }
+
+
+    /*
+     * Most HiveOS React layouts use one of these wrappers.
+     */
+
+    body > div:not(#cnc-background):not(#cnc-command-header):not(#cnc-sidebar):not(#cnc-corners) {
+        background-image: none !important;
+    }
+
+
+    /*
+     * Common full-page layout wrappers.
+     *
+     * These only remove the image, not the background color.
+     */
+
+    [class*="layout"],
+    [class*="Layout"],
+    [class*="page"],
+    [class*="Page"],
+    [class*="app"],
+    [class*="App"] {
+        background-image: none !important;
+    }
+
+
+    /*
+     * Re-assert our background after the broad selectors.
+     */
+
+    #cnc-background {
+    background-image:
+    linear-gradient(
+        rgba(0, 0, 0, .48),
+                    rgba(0, 0, 0, .72)
+    ),
+    url("${CNC_BACKGROUND}") !important;
     }
     `);
 
@@ -284,12 +610,9 @@
     GM_addStyle(`
     html,
     body {
-        background-color: ${C.black} !important;
-
-        background-image: none !important;
-
         color: ${C.white} !important;
     }
+
 
     body {
         font-family:
@@ -304,23 +627,24 @@
         padding-top: 30px !important;
     }
 
+
     #root,
     #app,
     main,
     [role="main"] {
-        background-color: transparent !important;
-        background-image: none !important;
-
         color: ${C.white} !important;
     }
 
+
     #root,
     #app {
-    min-height: calc(100vh - 30px) !important;
+    min-height:
+    calc(100vh - 30px) !important;
     }
 
+
     /*
-     * Scanlines
+     * Scanlines.
      */
 
     body::before {
@@ -346,8 +670,9 @@
         opacity: .28;
     }
 
+
     /*
-     * Vignette
+     * Vignette.
      */
 
     body::after {
@@ -366,6 +691,7 @@
                 inset 0 0 30px rgba(255,0,0,.04);
     }
 
+
     /*
      * Remove modern rounded styling.
      */
@@ -374,8 +700,9 @@
         border-radius: 0 !important;
     }
 
+
     /*
-     * Scrollbars
+     * Scrollbars.
      */
 
     div,
@@ -388,14 +715,17 @@
         ${C.black2};
     }
 
+
     ::-webkit-scrollbar {
         width: 9px !important;
         height: 9px !important;
     }
 
+
     ::-webkit-scrollbar-track {
         background: #050607 !important;
     }
+
 
     ::-webkit-scrollbar-thumb {
         background:
@@ -408,12 +738,14 @@
         border: 1px solid #66201c !important;
     }
 
+
     ::-webkit-scrollbar-thumb:hover {
         background: ${C.red} !important;
     }
 
+
     /*
-     * Panels / Cards
+     * Panels / Cards.
      */
 
     [class*="card"],
@@ -438,8 +770,9 @@
                 0 3px 12px rgba(0,0,0,.40) !important;
     }
 
+
     /*
-     * Tables
+     * Tables.
      */
 
     table {
@@ -449,6 +782,7 @@
 
         border: 1px solid ${C.border} !important;
     }
+
 
     thead,
     th {
@@ -469,6 +803,7 @@
         letter-spacing: .05em !important;
     }
 
+
     td {
         background: transparent !important;
 
@@ -478,13 +813,15 @@
         1px solid rgba(255,255,255,.045) !important;
     }
 
+
     tr:hover td {
         background:
         rgba(255,59,48,.08) !important;
     }
 
+
     /*
-     * Inputs
+     * Inputs.
      */
 
     input,
@@ -501,6 +838,7 @@
         inset 0 2px 5px rgba(0,0,0,.7) !important;
     }
 
+
     input:focus,
     textarea:focus,
     select:focus {
@@ -514,8 +852,9 @@
                 inset 0 2px 5px rgba(0,0,0,.7) !important;
     }
 
+
     /*
-     * Buttons
+     * Buttons.
      */
 
     button,
@@ -543,6 +882,7 @@
                 letter-spacing: .035em !important;
     }
 
+
     button:hover,
     [role="button"]:hover {
         color: #fff !important;
@@ -561,6 +901,7 @@
                 inset 0 1px rgba(255,255,255,.08) !important;
     }
 
+
     button:active,
     [role="button"]:active {
         background: #170a0a !important;
@@ -569,13 +910,15 @@
         inset 0 3px 7px rgba(0,0,0,.75) !important;
     }
 
+
     /*
-     * Links
+     * Links.
      */
 
     a {
         color: ${C.redBright} !important;
     }
+
 
     a:hover {
         color: ${C.yellow} !important;
@@ -584,8 +927,9 @@
         0 0 6px rgba(255,204,51,.25) !important;
     }
 
+
     /*
-     * Progress bars
+     * Progress bars.
      */
 
     [role="progressbar"] {
@@ -594,6 +938,7 @@
         border:
         1px solid ${C.border} !important;
     }
+
 
     [role="progressbar"] > * {
         background:
@@ -609,8 +954,9 @@
         0 0 8px rgba(255,59,48,.3) !important;
     }
 
+
     /*
-     * Alerts
+     * Alerts.
      */
 
     [class*="alert"],
@@ -625,8 +971,9 @@
         color: ${C.white} !important;
     }
 
+
     /*
-     * Dialogs
+     * Dialogs.
      */
 
     [role="dialog"] {
@@ -646,8 +993,9 @@
                 0 0 30px rgba(255,0,0,.08) !important;
     }
 
+
     /*
-     * Menus
+     * Menus.
      */
 
     [role="menu"],
@@ -675,30 +1023,40 @@
 
     function createCommandHeader() {
 
-        if (document.getElementById('cnc-command-header'))
+        if (
+            document.getElementById(
+                'cnc-command-header'
+            )
+        ) {
             return;
+        }
 
-        const header = document.createElement('div');
 
-        header.id = 'cnc-command-header';
+        const header =
+        document.createElement('div');
 
-        header.innerHTML = `
-        <div class="cnc-logo">
-        <span class="cnc-logo-mark">◆</span>
-        COMMAND & CONQUER
-        </div>
+        header.id =
+        'cnc-command-header';
 
-        <div class="cnc-center">
-        HIVEOS // COMMAND CENTER
-        </div>
 
-        <div class="cnc-status">
-        <span class="cnc-light"></span>
-        SYSTEM ONLINE
-        </div>
-        `;
+                header.innerHTML = `
+                <div class="cnc-logo">
+                <span class="cnc-logo-mark">◆</span>
+                COMMAND & CONQUER
+                </div>
 
-        document.body.appendChild(header);
+                <div class="cnc-center">
+                HIVEOS // COMMAND CENTER
+                </div>
+
+                <div class="cnc-status">
+                <span class="cnc-light"></span>
+                SYSTEM ONLINE
+                </div>
+                `;
+
+
+                document.body.appendChild(header);
     }
 
 
@@ -749,6 +1107,7 @@
                 pointer-events: none !important;
     }
 
+
     #cnc-command-header::after {
     content: "";
 
@@ -772,6 +1131,7 @@
     opacity: .5;
     }
 
+
     .cnc-logo {
         color: ${C.redBright} !important;
 
@@ -779,6 +1139,7 @@
 
         white-space: nowrap !important;
     }
+
 
     .cnc-logo-mark {
         color: ${C.yellow} !important;
@@ -788,6 +1149,7 @@
         text-shadow:
         0 0 6px rgba(255,204,51,.5) !important;
     }
+
 
     .cnc-center {
         position: absolute;
@@ -802,6 +1164,7 @@
         letter-spacing: .16em !important;
     }
 
+
     .cnc-status {
         margin-left: auto !important;
 
@@ -809,6 +1172,7 @@
 
         white-space: nowrap !important;
     }
+
 
     .cnc-light {
         display: inline-block !important;
@@ -830,8 +1194,11 @@
         cncPulse 1.8s infinite !important;
     }
 
+
     @keyframes cncPulse {
-        0%, 100% {
+
+        0%,
+        100% {
             opacity: 1;
         }
 
@@ -850,142 +1217,179 @@
 
     function createCommandSidebar() {
 
-        if (document.getElementById('cnc-sidebar'))
+        if (
+            document.getElementById(
+                'cnc-sidebar'
+            )
+        ) {
             return;
-
-        const side = document.createElement('aside');
-
-        side.id = 'cnc-sidebar';
-
-        side.innerHTML = `
-        <div class="cnc-side-title">
-        <span>◆</span>
-        COMMAND
-        </div>
-
-        <div class="cnc-side-section">
-
-        <div class="cnc-side-label">
-        SYSTEM
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Overview">
-        <span>◈</span>
-        OVERVIEW
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Flight Sheet">
-        <span>▣</span>
-        FLIGHT SHEETS
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Overclocking">
-        <span>⚙</span>
-        OVERCLOCKING
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Autofan">
-        <span>◉</span>
-        AUTOFAN
-        </div>
-
-        </div>
-
-        <div class="cnc-side-section">
-
-        <div class="cnc-side-label">
-        INTELLIGENCE
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Tuning">
-        <span>◇</span>
-        TUNING
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Stats">
-        <span>▥</span>
-        STATS
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Activity">
-        <span>◆</span>
-        ACTIVITY
-        </div>
-
-        <div class="cnc-side-item"
-        data-target="Settings">
-        <span>⚙</span>
-        SETTINGS
-        </div>
-
-        </div>
-
-        <div class="cnc-side-footer">
-
-        <div class="cnc-side-status">
-        <span></span>
-        NETWORK
-        </div>
-
-        <div class="cnc-side-status">
-        <span></span>
-        MINING
-        </div>
-
-        <div class="cnc-side-status">
-        <span></span>
-        CORE
-        </div>
-
-        </div>
-        `;
-
-        document.body.appendChild(side);
+        }
 
 
-        side.querySelectorAll('.cnc-side-item')
-        .forEach(item => {
+        const side =
+        document.createElement('aside');
 
-            item.addEventListener('click', () => {
+        side.id =
+        'cnc-sidebar';
 
-                const target =
-                item.dataset.target
-                .toLowerCase();
 
-                const elements =
-                Array.from(
-                    document.querySelectorAll(
-                        'a, button, [role="button"]'
-                    )
+            side.innerHTML = `
+            <div class="cnc-side-title">
+            <span>◆</span>
+            COMMAND
+            </div>
+
+
+            <div class="cnc-side-section">
+
+            <div class="cnc-side-label">
+            SYSTEM
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Overview">
+            <span>◈</span>
+            OVERVIEW
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Flight Sheet">
+            <span>▣</span>
+            FLIGHT SHEETS
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Overclocking">
+            <span>⚙</span>
+            OVERCLOCKING
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Autofan">
+            <span>◉</span>
+            AUTOFAN
+            </div>
+
+            </div>
+
+
+            <div class="cnc-side-section">
+
+            <div class="cnc-side-label">
+            INTELLIGENCE
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Tuning">
+            <span>◇</span>
+            TUNING
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Stats">
+            <span>▥</span>
+            STATS
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Activity">
+            <span>◆</span>
+            ACTIVITY
+            </div>
+
+
+            <div class="cnc-side-item"
+            data-target="Settings">
+            <span>⚙</span>
+            SETTINGS
+            </div>
+
+            </div>
+
+
+            <div class="cnc-side-footer">
+
+            <div class="cnc-side-status">
+            <span></span>
+            NETWORK
+            </div>
+
+
+            <div class="cnc-side-status">
+            <span></span>
+            MINING
+            </div>
+
+
+            <div class="cnc-side-status">
+            <span></span>
+            CORE
+            </div>
+
+            </div>
+            `;
+
+
+            document.body.appendChild(side);
+
+
+            /*
+             * Connect sidebar buttons to the real HiveOS navigation.
+             */
+
+            side
+            .querySelectorAll('.cnc-side-item')
+            .forEach(item => {
+
+                item.addEventListener(
+                    'click',
+                    () => {
+
+                        const target =
+                        item.dataset.target
+                        .toLowerCase();
+
+
+                        const elements =
+                        Array.from(
+                            document.querySelectorAll(
+                                'a, button, [role="button"]'
+                            )
+                        );
+
+
+                        const match =
+                        elements.find(el => {
+
+                            const text =
+                            (
+                                el.innerText ||
+                                el.textContent ||
+                                ''
+                            )
+                            .trim()
+                            .toLowerCase();
+
+
+                            return (
+                                text === target ||
+                                text.includes(target)
+                            );
+                        });
+
+
+                        if (match)
+                            match.click();
+                    }
                 );
-
-                const match =
-                elements.find(el => {
-
-                    const text =
-                    (
-                        el.innerText ||
-                        el.textContent ||
-                        ''
-                    )
-                    .trim()
-                    .toLowerCase();
-
-                    return text === target ||
-                    text.includes(target);
-                });
-
-                if (match)
-                    match.click();
             });
-        });
     }
 
 
@@ -1028,6 +1432,7 @@
                 monospace !important;
     }
 
+
     #cnc-sidebar::before {
     content: "";
 
@@ -1048,6 +1453,7 @@
 
     opacity: .35;
     }
+
 
     .cnc-side-title {
         height: 42px !important;
@@ -1079,15 +1485,18 @@
         ) !important;
     }
 
+
     .cnc-side-title span {
         color: ${C.yellow} !important;
 
         margin-right: 9px !important;
     }
 
+
     .cnc-side-section {
         padding: 12px 8px 4px !important;
     }
+
 
     .cnc-side-label {
         padding: 4px 8px !important;
@@ -1103,6 +1512,7 @@
 
         margin-bottom: 4px !important;
     }
+
 
     .cnc-side-item {
         height: 32px !important;
@@ -1141,6 +1551,7 @@
         border-color .12s !important;
     }
 
+
     .cnc-side-item span {
         width: 24px !important;
 
@@ -1148,6 +1559,7 @@
 
         font-size: 12px !important;
     }
+
 
     .cnc-side-item:hover {
         color: #fff !important;
@@ -1163,9 +1575,11 @@
         ) !important;
     }
 
+
     .cnc-side-item:hover span {
         color: ${C.yellow} !important;
     }
+
 
     .cnc-side-footer {
         position: absolute !important;
@@ -1182,6 +1596,7 @@
         padding-top: 9px !important;
     }
 
+
     .cnc-side-status {
         height: 21px !important;
 
@@ -1195,6 +1610,7 @@
 
         letter-spacing: .12em !important;
     }
+
 
     .cnc-side-status span {
         width: 5px !important;
@@ -1221,17 +1637,18 @@
      */
 
     GM_addStyle(`
-    body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background) {
+    body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background):not(#cnc-corners) {
         position: relative !important;
     }
 
+
     @media (min-width: 1100px) {
 
-        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background) {
+        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background):not(#cnc-corners) {
             margin-left: 210px !important;
         }
-
     }
+
 
     @media (max-width: 1099px) {
 
@@ -1239,11 +1656,12 @@
         width: 165px !important;
         }
 
-        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background) {
+
+        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background):not(#cnc-corners) {
             margin-left: 165px !important;
         }
-
     }
+
 
     @media (max-width: 700px) {
 
@@ -1251,10 +1669,10 @@
         display: none !important;
         }
 
-        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background) {
+
+        body > div:not(#cnc-sidebar):not(#cnc-command-header):not(#cnc-background):not(#cnc-corners) {
             margin-left: 0 !important;
         }
-
     }
     `);
 
@@ -1272,6 +1690,7 @@
             'a, button, [role="button"], [role="tab"]'
         );
 
+
         elements.forEach(el => {
 
             const text =
@@ -1283,8 +1702,10 @@
             .trim()
             .replace(/\s+/g, ' ');
 
+
             if (!text)
                 return;
+
 
             const known = [
                 'Overview',
@@ -1298,26 +1719,36 @@
                 'Settings'
             ];
 
-            if (!known.some(x =>
+
+            if (
+                !known.some(x =>
                 text.toLowerCase() ===
                 x.toLowerCase()
-            )) {
+                )
+            ) {
                 return;
             }
+
 
             el.classList.add(
                 'cnc-hive-nav'
             );
 
+
             if (
-                el.getAttribute('aria-current') === 'page' ||
-                el.getAttribute('aria-selected') === 'true'
+                el.getAttribute(
+                    'aria-current'
+                ) === 'page' ||
+
+                el.getAttribute(
+                    'aria-selected'
+                ) === 'true'
             ) {
+
                 el.classList.add(
                     'cnc-hive-nav-active'
                 );
             }
-
         });
     }
 
@@ -1336,6 +1767,7 @@
         letter-spacing: .045em !important;
     }
 
+
     .cnc-hive-nav:hover {
         color: ${C.redBright} !important;
 
@@ -1347,10 +1779,10 @@
         ) !important;
     }
 
+
     .cnc-hive-nav-active,
     .cnc-hive-nav[aria-current="page"],
     .cnc-hive-nav[aria-selected="true"] {
-
         color: ${C.yellow} !important;
 
         border-bottom-color:
@@ -1370,22 +1802,31 @@
 
     function createCornerDecorations() {
 
-        if (document.getElementById('cnc-corners'))
+        if (
+            document.getElementById(
+                'cnc-corners'
+            )
+        ) {
             return;
+        }
+
 
         const el =
         document.createElement('div');
 
-        el.id = 'cnc-corners';
+        el.id =
+        'cnc-corners';
 
-        el.innerHTML = `
-        <div class="cnc-corner cnc-tl"></div>
-        <div class="cnc-corner cnc-tr"></div>
-        <div class="cnc-corner cnc-bl"></div>
-        <div class="cnc-corner cnc-br"></div>
-        `;
 
-        document.body.appendChild(el);
+                el.innerHTML = `
+                <div class="cnc-corner cnc-tl"></div>
+                <div class="cnc-corner cnc-tr"></div>
+                <div class="cnc-corner cnc-bl"></div>
+                <div class="cnc-corner cnc-br"></div>
+                `;
+
+
+                document.body.appendChild(el);
     }
 
 
@@ -1400,12 +1841,14 @@
     z-index: 2147481000 !important;
     }
 
+
     .cnc-corner {
         position: absolute !important;
 
         width: 26px !important;
         height: 26px !important;
     }
+
 
     .cnc-tl {
         top: 36px;
@@ -1418,6 +1861,7 @@
         2px solid ${C.red};
     }
 
+
     .cnc-tr {
         top: 36px;
         right: 10px;
@@ -1429,6 +1873,7 @@
         2px solid ${C.red};
     }
 
+
     .cnc-bl {
         bottom: 10px;
         left: 216px;
@@ -1439,6 +1884,7 @@
         border-left:
         2px solid ${C.red};
     }
+
 
     .cnc-br {
         bottom: 10px;
@@ -1466,6 +1912,7 @@
                 'COMMAND & CONQUER'
             )
         ) {
+
             document.title =
             'COMMAND & CONQUER // ' +
             document.title;
@@ -1484,23 +1931,30 @@
         if (cncAudio)
             return;
 
+
         cncAudio =
         document.createElement('audio');
+
 
         cncAudio.id =
         'cnc-ra3-music';
 
+
         cncAudio.preload =
         'auto';
+
 
         cncAudio.volume =
         0.35;
 
+
         cncAudio.loop =
         false;
 
+
         cncAudio.style.display =
         'none';
+
 
         document.body.appendChild(
             cncAudio
@@ -1508,8 +1962,7 @@
 
 
         /*
-         * Automatically advance to the next
-         * soundtrack file.
+         * Advance to the next soundtrack file.
          */
 
         cncAudio.addEventListener(
@@ -1518,12 +1971,14 @@
 
                 cncTrackIndex++;
 
+
                 if (
                     cncTrackIndex >=
                     CNC_TRACKS.length
                 ) {
                     cncTrackIndex = 0;
                 }
+
 
                 playCNCTrack();
             }
@@ -1543,7 +1998,9 @@
                     CNC_TRACKS[cncTrackIndex]
                 );
 
+
                 cncTrackIndex++;
+
 
                 if (
                     cncTrackIndex >=
@@ -1551,6 +2008,7 @@
                 ) {
                     cncTrackIndex = 0;
                 }
+
 
                 setTimeout(
                     playCNCTrack,
@@ -1566,8 +2024,10 @@
         if (!cncAudio)
             return;
 
+
         const track =
         CNC_TRACKS[cncTrackIndex];
+
 
         const url =
         cncAssetURL(
@@ -1575,19 +2035,24 @@
             track
         );
 
+
         console.log(
             '%c C&C RA3 MUSIC ',
             'background:#350000;color:#ffcc33;font-weight:bold;padding:3px 6px;',
             track
         );
 
+
         cncAudio.src =
         url;
 
+
         cncAudio.load();
+
 
         const promise =
         cncAudio.play();
+
 
         if (promise) {
 
@@ -1598,7 +2063,6 @@
                         '[C&C] Browser blocked audio until user interaction.',
                         error
                     );
-
                 }
             );
         }
@@ -1613,6 +2077,7 @@
      * Chrome/Chromium normally blocks unmuted autoplay.
      *
      * The first click or key press activates the soundtrack.
+     * ============================================================
      */
 
     function activateCNCAudio() {
@@ -1620,12 +2085,15 @@
         if (cncAudioStarted)
             return;
 
+
         cncAudioStarted =
         true;
+
 
         createCNCAudio();
 
         playCNCTrack();
+
 
         document.removeEventListener(
             'click',
@@ -1633,11 +2101,13 @@
             true
         );
 
+
         document.removeEventListener(
             'keydown',
             activateCNCAudio,
             true
         );
+
 
         console.log(
             '%c COMMAND & CONQUER // AUDIO ONLINE ',
@@ -1650,11 +2120,13 @@
 
         createCNCAudio();
 
+
         document.addEventListener(
             'click',
             activateCNCAudio,
             true
         );
+
 
         document.addEventListener(
             'keydown',
@@ -1673,19 +2145,26 @@
     function init() {
 
         /*
-         * Background must exist before the
-         * React application renders over it.
+         * Create the RA3 background.
          */
-
         createCNCBackground();
 
-        /*
-         * Create hidden audio player and wait
-         * for the first user interaction.
-         */
 
+        /*
+         * Remove the HiveOS page background.
+         */
+        removeHiveOSBackgrounds();
+
+
+        /*
+         * Audio.
+         */
         setupCNCAudio();
 
+
+        /*
+         * Command center UI.
+         */
         createCommandHeader();
 
         createCommandSidebar();
@@ -1701,7 +2180,6 @@
             '%c COMMAND & CONQUER // HIVEOS THEME ACTIVE ',
             'background:#120000;color:#ff504c;font-weight:bold;padding:5px 10px;border:1px solid #ff3b30;'
         );
-
     }
 
 
@@ -1709,12 +2187,30 @@
      * ============================================================
      * REACT / HIVEOS MUTATION HANDLING
      * ============================================================
+     *
+     * HiveOS is React-based, so navigation can cause portions of
+     * the DOM to be destroyed and recreated.
+     *
+     * The observer makes sure the theme survives those changes.
+     * ============================================================
      */
 
     const observer =
     new MutationObserver(() => {
 
+        /*
+         * Don't immediately scan the entire DOM for every
+         * mutation. Schedule one cleanup for the next frame.
+         */
+        scheduleBackgroundCleanup();
+
+
+        /*
+         * Restore theme UI if HiveOS removed anything.
+         */
+
         styleHiveNavigation();
+
 
         if (
             !document.getElementById(
@@ -1724,6 +2220,7 @@
             createCommandHeader();
         }
 
+
         if (
             !document.getElementById(
                 'cnc-sidebar'
@@ -1731,6 +2228,7 @@
         ) {
             createCommandSidebar();
         }
+
 
         if (
             !document.getElementById(
@@ -1740,6 +2238,7 @@
             createCornerDecorations();
         }
 
+
         if (
             !document.getElementById(
                 'cnc-background'
@@ -1747,7 +2246,6 @@
         ) {
             createCNCBackground();
         }
-
     });
 
 
@@ -1760,6 +2258,7 @@
     function start() {
 
         init();
+
 
         observer.observe(
             document.documentElement,
@@ -1787,7 +2286,6 @@
     } else {
 
         start();
-
     }
 
 })();
