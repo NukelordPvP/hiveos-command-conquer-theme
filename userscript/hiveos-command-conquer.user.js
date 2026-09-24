@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         HiveOS - Command & Conquer Red Alert 3 UI
-// @namespace    [https://github.com/NukelordPvP/hiveos-command-conquer-theme](https://github.com/NukelordPvP/hiveos-command-conquer-theme)
-// @version      3.2.1
+// @namespace    https://github.com/NukelordPvP/hiveos-command-conquer-theme
+// @version      3.3.0
 // @description  Converts the HiveOS web interface into a Command & Conquer / Red Alert 3 command center with RA3 music and background.
 // @author       Zack
-// @match        [https://the.hiveos.farm/](https://the.hiveos.farm/)*
+// @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
 // @run-at       document-start
 // @grant        GM_addStyle
@@ -226,26 +226,35 @@
      * ============================================================
      * HIVEOS BACKGROUND BLOCKER
      *
-     * These are the actual HiveOS-generated classes containing
-     * the original background:
+     * IMPORTANT:
      *
-     * .e6e13ee71bc014dedcbe
-     * .c42f3a04e2d739bc22e3
-     * .c00b1e5cf79dafaebecc
-     * .ffaf0dcc275c3f9d0068
+     * .faad792b22b16da7477d is an ADDITIONAL HiveOS background
+     * element. It is NOT replacing the existing background
+     * classes.
      *
-     * The CSS !important rule handles normal stylesheet rules.
-     * The JavaScript function also removes inline backgrounds
-     * because HiveOS/React may add them dynamically.
+     * All of these HiveOS background layers are blocked:
+     *
+     *   .faad792b22b16da7477d
+     *   .e6e13ee71bc014dedcbe
+     *   .c42f3a04e2d739bc22e3
+     *   .c00b1e5cf79dafaebecc
+     *   .ffaf0dcc275c3f9d0068
+     *
+     * Our RA3 background is created separately as:
+     *
+     *   #cnc-background
      * ============================================================
      */
 
     const HIVEOS_BACKGROUND_CLASSES = [
+        'faad792b22b16da7477d',
+
         'e6e13ee71bc014dedcbe',
         'c42f3a04e2d739bc22e3',
         'c00b1e5cf79dafaebecc',
         'ffaf0dcc275c3f9d0068'
     ];
+
 
     function killHiveOSBackground() {
         for (const className of HIVEOS_BACKGROUND_CLASSES) {
@@ -276,11 +285,32 @@
                     'scroll',
                     'important'
                 );
+
+                element.style.setProperty(
+                    'background-position',
+                    'initial',
+                    'important'
+                );
+
+                element.style.setProperty(
+                    'background-size',
+                    'auto',
+                    'important'
+                );
             });
         }
     }
 
+
     GM_addStyle(`
+    /*
+     * Current additional HiveOS background layer
+     */
+    .faad792b22b16da7477d,
+
+    /*
+     * Existing HiveOS background layers
+     */
     .e6e13ee71bc014dedcbe,
     .c42f3a04e2d739bc22e3,
     .c00b1e5cf79dafaebecc,
@@ -289,18 +319,30 @@
         background-image: none !important;
         background-color: transparent !important;
         background-attachment: scroll !important;
+        background-position: initial !important;
+        background-size: auto !important;
     }
+
+    /*
+     * Kill pseudo-element backgrounds as well.
+     */
+    .faad792b22b16da7477d::before,
+    .faad792b22b16da7477d::after,
 
     .e6e13ee71bc014dedcbe::before,
     .e6e13ee71bc014dedcbe::after,
+
     .c42f3a04e2d739bc22e3::before,
     .c42f3a04e2d739bc22e3::after,
+
     .c00b1e5cf79dafaebecc::before,
     .c00b1e5cf79dafaebecc::after,
+
     .ffaf0dcc275c3f9d0068::before,
     .ffaf0dcc275c3f9d0068::after {
         background: transparent !important;
         background-image: none !important;
+        background-color: transparent !important;
     }
     `);
 
@@ -312,10 +354,12 @@
      */
 
     function createCNCBackground() {
-        let bg = document.getElementById('cnc-background');
+        let bg =
+        document.getElementById('cnc-background');
 
         if (!bg) {
             bg = document.createElement('div');
+
             bg.id = 'cnc-background';
 
             if (document.body) {
@@ -326,6 +370,7 @@
             }
         }
     }
+
 
     GM_addStyle(`
     #cnc-background {
@@ -702,30 +747,37 @@
      */
 
     function createCommandHeader() {
-        if (document.getElementById('cnc-command-header'))
+        if (
+            document.getElementById(
+                'cnc-command-header'
+            )
+        ) {
             return;
+        }
 
-        const header = document.createElement('div');
+        const header =
+        document.createElement('div');
 
-        header.id = 'cnc-command-header';
+        header.id =
+        'cnc-command-header';
 
-        header.innerHTML = `
-        <div class="cnc-logo">
-        <span class="cnc-logo-mark">◆</span>
-        COMMAND & CONQUER
-        </div>
+            header.innerHTML = `
+            <div class="cnc-logo">
+            <span class="cnc-logo-mark">◆</span>
+            COMMAND & CONQUER
+            </div>
 
-        <div class="cnc-center">
-        HIVEOS // COMMAND CENTER
-        </div>
+            <div class="cnc-center">
+            HIVEOS // COMMAND CENTER
+            </div>
 
-        <div class="cnc-status">
-        <span class="cnc-light"></span>
-        SYSTEM ONLINE
-        </div>
-        `;
+            <div class="cnc-status">
+            <span class="cnc-light"></span>
+            SYSTEM ONLINE
+            </div>
+            `;
 
-        document.body.appendChild(header);
+            document.body.appendChild(header);
     }
 
 
@@ -876,12 +928,19 @@
      */
 
     function createCommandSidebar() {
-        if (document.getElementById('cnc-sidebar'))
+        if (
+            document.getElementById(
+                'cnc-sidebar'
+            )
+        ) {
             return;
+        }
 
-        const side = document.createElement('aside');
+        const side =
+        document.createElement('aside');
 
-        side.id = 'cnc-sidebar';
+        side.id =
+        'cnc-sidebar';
 
         side.innerHTML = `
         <div class="cnc-side-title">
@@ -967,38 +1026,45 @@
 
         document.body.appendChild(side);
 
-        side.querySelectorAll('.cnc-side-item')
-        .forEach(item => {
-            item.addEventListener('click', () => {
-                const target =
-                item.dataset.target
-                .toLowerCase();
-
-                const elements =
-                Array.from(
-                    document.querySelectorAll(
-                        'a, button, [role="button"]'
-                    )
-                );
-
-                const match =
-                elements.find(el => {
-                    const text =
-                    (
-                        el.innerText ||
-                        el.textContent ||
-                        ''
-                    )
-                    .trim()
+        side.querySelectorAll(
+            '.cnc-side-item'
+        ).forEach(item => {
+            item.addEventListener(
+                'click',
+                () => {
+                    const target =
+                    item.dataset.target
                     .toLowerCase();
 
-                    return text === target ||
-                    text.includes(target);
-                });
+                    const elements =
+                    Array.from(
+                        document.querySelectorAll(
+                            'a, button, [role="button"]'
+                        )
+                    );
 
-                if (match)
-                    match.click();
-            });
+                    const match =
+                    elements.find(el => {
+                        const text =
+                        (
+                            el.innerText ||
+                            el.textContent ||
+                            ''
+                        )
+                        .trim()
+                        .toLowerCase();
+
+                        return (
+                            text === target ||
+                            text.includes(target)
+                        );
+                    });
+
+                    if (match) {
+                        match.click();
+                    }
+                }
+            );
         });
     }
 
@@ -1289,8 +1355,9 @@
             .trim()
             .replace(/\s+/g, ' ');
 
-            if (!text)
+            if (!text) {
                 return;
+            }
 
             const known = [
                 'Overview',
@@ -1304,10 +1371,12 @@
                 'Settings'
             ];
 
-            if (!known.some(x =>
+            if (
+                !known.some(x =>
                 text.toLowerCase() ===
                 x.toLowerCase()
-            )) {
+                )
+            ) {
                 return;
             }
 
@@ -1316,8 +1385,12 @@
             );
 
             if (
-                el.getAttribute('aria-current') === 'page' ||
-                el.getAttribute('aria-selected') === 'true'
+                el.getAttribute(
+                    'aria-current'
+                ) === 'page' ||
+                el.getAttribute(
+                    'aria-selected'
+                ) === 'true'
             ) {
                 el.classList.add(
                     'cnc-hive-nav-active'
@@ -1373,22 +1446,28 @@
      */
 
     function createCornerDecorations() {
-        if (document.getElementById('cnc-corners'))
+        if (
+            document.getElementById(
+                'cnc-corners'
+            )
+        ) {
             return;
+        }
 
         const el =
         document.createElement('div');
 
-        el.id = 'cnc-corners';
+        el.id =
+        'cnc-corners';
 
-        el.innerHTML = `
-        <div class="cnc-corner cnc-tl"></div>
-        <div class="cnc-corner cnc-tr"></div>
-        <div class="cnc-corner cnc-bl"></div>
-        <div class="cnc-corner cnc-br"></div>
-        `;
+                el.innerHTML = `
+                <div class="cnc-corner cnc-tl"></div>
+                <div class="cnc-corner cnc-tr"></div>
+                <div class="cnc-corner cnc-bl"></div>
+                <div class="cnc-corner cnc-br"></div>
+                `;
 
-        document.body.appendChild(el);
+                document.body.appendChild(el);
     }
 
 
@@ -1482,8 +1561,9 @@
      */
 
     function createCNCAudio() {
-        if (cncAudio)
+        if (cncAudio) {
             return;
+        }
 
         cncAudio =
         document.createElement('audio');
@@ -1550,8 +1630,9 @@
 
 
     function playCNCTrack() {
-        if (!cncAudio)
+        if (!cncAudio) {
             return;
+        }
 
         const track =
         CNC_TRACKS[cncTrackIndex];
@@ -1590,8 +1671,9 @@
 
 
     function activateCNCAudio() {
-        if (cncAudioStarted)
+        if (cncAudioStarted) {
             return;
+        }
 
         cncAudioStarted =
         true;
@@ -1666,25 +1748,24 @@
      * REACT / HIVEOS MUTATION HANDLING
      * ============================================================
      *
-     * IMPORTANT:
+     * Watches both child additions and style/class changes.
      *
-     * The observer now watches BOTH:
+     * This is especially important for:
      *
-     *   childList
-     *   attributes
+     *     .faad792b22b16da7477d
      *
-     * HiveOS can dynamically add/change the background using
-     * React-generated class names or inline styles.
-     *
-     * Every mutation therefore re-applies the background blocker.
+     * because HiveOS can recreate or modify the additional
+     * background layer after the page has already loaded.
      * ============================================================
      */
 
     let mutationQueued = false;
 
+
     function handleMutations() {
-        if (mutationQueued)
+        if (mutationQueued) {
             return;
+        }
 
         mutationQueued = true;
 
@@ -1761,11 +1842,9 @@
         /*
          * Extra periodic check.
          *
-         * This is intentional because React/CSS-in-JS can
-         * occasionally restore styles without producing the
-         * exact mutation we expect.
+         * React/CSS-in-JS can occasionally restore a background
+         * without producing a mutation that we can reliably use.
          */
-
         setInterval(
             killHiveOSBackground,
             1000
