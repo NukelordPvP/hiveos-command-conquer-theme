@@ -247,8 +247,12 @@
      */
 
     const HIVEOS_BACKGROUND_CLASSES = [
+        // Additional HiveOS background layers
         'faad792b22b16da7477d',
+        'ce8ac514111773b5c14f',
+        'c44e0322715aa427eb2f',
 
+        // Existing HiveOS background layers
         'e6e13ee71bc014dedcbe',
         'c42f3a04e2d739bc22e3',
         'c00b1e5cf79dafaebecc',
